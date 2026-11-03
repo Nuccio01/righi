@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CYBER MISSION - Pannello Docente</title>
+<style>
+*{box-sizing:border-box}
+body{
+  margin:0;background:#081426;color:#f1f5ff;
+  font-family:Arial,sans-serif;min-height:100vh;padding:20px
+}
+header{
+  max-width:800px;margin:0 auto 20px;text-align:center;
+  background:linear-gradient(130deg,#10264d,#075b78);
+  padding:25px;border-radius:14px;border:1px solid #27a9df
+}
+h1{margin:0 0 5px;font-size:26px}
+main{max-width:800px;margin:auto}
+.card{
+  background:#14243b;border:1px solid #2d4866;
+  padding:20px;border-radius:14px;margin-bottom:16px;
+  box-shadow:0 8px 25px #0003
+}
+input,button{
+  width:100%;padding:14px;border-radius:10px;
+  border:1px solid #526e8b;background:#091426;
+  color:white;font-size:15px;margin:8px 0
+}
+button{cursor:pointer;border:0;font-weight:bold;background:#1689df}
+button.secondary{background:#34445a}
+button.danger{background:#a93226}
+button:hover{opacity:.9}
+.hidden{display:none!important}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.stat-box{background:#0d1b30;padding:15px;border-radius:10px;text-align:center;border:1px solid #223c5c}
+.stat-num{font-size:28px;font-weight:bold;color:#51c5ff;margin-top:5px}
+.q-card{background:#101f35;padding:12px;border-radius:8px;margin:10px 0;border:1px solid #233e5c}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>🔐 PANNELLO DOCENTE</h1>
+  <p>Gestione in tempo reale di CYBER MISSION</p>
+</header>
+
+<main>
+  <!-- SEZIONE LOGIN -->
+  <section id="login-section" class="card">
+    <h2>Autenticazione Richiesta</h2>
+    <p>Inserisci la password docente per accedere alla regia.</p>
+    <input type="password" id="password" placeholder="Password docente...">
+    <button onclick="login()">ACCEDI AL PANNELLO</button>
+    <p id="login-error" style="color:#ff6b6b;margin-top:10px;"></p>
+  </section>
+
+  <!-- SEZIONE REGIA -->
+  <section id="dashboard-section" class="card hidden">
+    <h2>🎛️ Controlli di Regia</h2>
+    <p>Missione Attuale: <strong id="current-q">-</strong> | Stato: <strong id="event-status">-</strong></p>
+    
+    <div class="grid">
+      <button onclick="sendAction('start')">▶️ Avvia / Sblocca</button>
+      <button onclick="sendAction('pause')">⏸️ Metti in Pausa</button>
+    </div>
+    <div class="grid">
+      <button onclick="sendAction('next')" class="secondary">➡️ Missione Successiva</button>
+      <button onclick="confirmRestart()" class="danger">🔄 Reset Totale</button>
+    </div>
+
+    <hr style="border:0;border-top:1px solid #2d4866;margin:20px 0;">
+
+    <h2>📊 Statistiche Studenti</h2>
+    <div class="stat-box">
+      <div>Partecipanti Unici</div>
+      <div id="participants" class="stat-num">0</div>
+    </div>
+    
+    <div id="questions-stats"></div>
+    
+    <button onclick="fetchResults()" class="secondary" style="margin-top:15px">🔄 Aggiorna Dati</button>
+  </section>
+</main>
+
+<script>
+let teacherPassword = "";
+let refreshInterval = null;
+
+async function login() {
+  teacherPassword = document.getElementById("password").value.trim();
+  const errorEl = document.getElementById("login-error");
+  errorEl.textContent = "";
+
+  try {
+    const res = await fetch("/api/control", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ password: teacherPassword })
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      throw new Error(data.error || "Errore di accesso");
+    }
+
+    document.getElementById("login-section").classList.add("hidden");
+    document.getElementById("dashboard-section").classList.remove("hidden");
+    
+    fetchResults();
+    refreshInterval = setInterval(fetchResults, 5000); // Aggiorna ogni 5 secondi
+
+  } catch (err) {
+    errorEl.textContent = err.message;
+  }
+}
+
+async function sendAction(action) {
+  try {
+    const res = await fetch("/api/mission", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-teacher-password": teacherPassword
+      },
+      body: JSON.stringify({ action })
+    });
+
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error);
+
+    fetchResults();
+  } catch (err) {
+    alert("Errore: " + err.message);
+  }
+}
+
+function confirmRestart() {
+  if (confirm("Attenzione: questo cancellerà tutte le risposte salvate e riporterà il gioco all'inizio. Continuare?")) {
+    sendAction("restart");
+  }
+}
+
+async function fetchResults() {
+  try {
+    const res = await fetch("/api/results", {
+      headers: { "x-teacher-password": teacherPassword }
+    });
+
+    if (!res.ok) throw new Error("Errore nel recupero dati");
+
+    const data = await res.json();
+
+    document.getElementById("current-q").textContent = data.current_question + " / 5";
+    document.getElementById("event-status").textContent = data.event_active ? "ATTIVO 🟢" : "IN PAUSA ⏸️";
+    document.getElementById("participants").textContent = data.participants;
+
+    const container = document.getElementById("questions-stats");
+    container.innerHTML = "<h3>Dettaglio Domande</h3>";
+
+    data.questions.forEach(q => {
+      let html = `<div class="q-card">
+        <strong>Missione ${q.question}</strong> (Totale risposte: ${q.total})<br>`;
+      
+      q.percentages.forEach(p => {
+        const isCorrect = p.option === q.correct;
+        html += `<div style="font-size:13px;margin:4px 0;color:${isCorrect ? '#26b9a0' : '#c4eaff'}">
+          Opzione ${String.fromCharCode(65 + p.option)}: ${p.count} voti (${p.percentage}%) ${isCorrect ? '✅' : ''}
+        </div>`;
+      });
+      html += `</div>`;
+      container.innerHTML += html;
+    });
+
+  } catch (err) {
+    console.error(err);
+  }
+}
+</script>
+</body>
+</html>
