@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CYBER MISSION - THE LAST MESSAGE</title>
+    <style>
+        body { font-family: Arial, sans-serif; background-color: #f4f6f9; color: #333; margin: 0; padding: 20px; text-align: center; }
+        .container { max-width: 600px; margin: 0 auto; background: white; padding: 30px; border-radius: 10px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
+        h1 { color: #d9534f; }
+        button { background-color: #5cb85c; color: white; border: none; padding: 12px 20px; font-size: 16px; border-radius: 5px; cursor: pointer; margin-top: 15px; }
+        button:hover { background-color: #4cae4c; }
+        input { padding: 10px; font-size: 16px; width: 80%; margin-top: 10px; border: 1px solid #ccc; border-radius: 5px; }
+        .hidden { display: none; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>CYBER MISSION – THE LAST MESSAGE</h1>
+        <p>Escape room digitale sul cyberbullismo per la classe terza media.</p>
+        
+        <div id="student-view">
+            <h3>Area Studenti</h3>
+            <p>Sei pronto a iniziare la missione? Rispondi alle domande direttamente dal tuo smartphone.</p>
+            <div id="question-box">
+                <p id="question-text">Caricamento in corso...</p>
+                <div id="options"></div>
+            </div>
+        </div>
+
+        <hr style="margin: 40px 0;">
+
+        <div id="teacher-section">
+            <h3>Area Insegnante</h3>
+            <button onclick="toggleTeacherLogin()">Accedi alla Dashboard</button>
+            <div id="login-box" class="hidden">
+                <input type="password" id="teacher-pass" placeholder="Inserisci password docente">
+                <br>
+                <button onclick="loginTeacher()">Entra</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function toggleTeacherLogin() {
+            document.getElementById('login-box').classList.toggle('hidden');
+        }
+        function loginTeacher() {
+            const pass = document.getElementById('teacher-pass').value;
+            if(pass === "admin123") { // Password temporanea di esempio
+                alert("Accesso riuscito alla Dashboard!");
+                // Qui collegheremo la schermata della dashboard docente
+            } else {
+                alert("Password errata!");
+            }
+        }
+    </script>
+</body>
+</html>
