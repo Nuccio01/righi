@@ -64,35 +64,36 @@ footer{text-align:center;color:#8298b2;font-size:12px;padding:25px}
 
 <main>
   <section id="welcome" class="card">
-   <h2>Benvenuto, agente! 🕵️</h2>
-   <p>Un messaggio misterioso è comparso nella chat della scuola.</p>
-   <p>Qualcuno sta subendo attacchi online. Dobbiamo scoprire cosa è successo e fermare il cyberbullismo.</p>
-   <p class="small">Per partecipare non servono nome, cognome o email. Scegli un nickname inventato.</p>
-   <input id="nickname" maxlength="18" placeholder="Es. CyberFox27">
-   <button onclick="startGame()">ENTRA NELLA MISSIONE 🚀</button>
+    <h2>Benvenuto, agente! 🕵️</h2>
+    <p>Un messaggio misterioso è comparso nella chat della scuola.</p>
+    <p>Qualcuno sta subendo attacchi online. Dobbiamo scoprire cosa è successo e fermare il cyberbullismo.</p>
+    <p class="small">Per partecipare non servono nome, cognome o email. Scegli un nickname inventato.</p>
+    <input id="nickname" maxlength="18" placeholder="Es. CyberFox27">
+    <button onclick="startGame()">ENTRA NELLA MISSIONE 🚀</button>
   </section>
 
   <section id="game" class="card hidden">
-   <div class="topline">
-    <span id="mission">MISSIONE 01</span>
-    <span id="counter">1 / 5</span>
-   </div>
-   <div class="progress"><div class="fill" id="progress"></div></div>
-   <p class="small">AGENTE: <span id="agent"></span></p>
-   <h2 id="title"></h2>
-   <p id="question"></p>
-   <div id="options"></div>
-   <button id="send" onclick="submitAnswer()" disabled>INVIA RISPOSTA</button>
-   <div id="feedback" aria-live="polite"></div>
-   <button id="next" class="hidden" onclick="nextQuestion()">PROSSIMA MISSIONE ➜</button>
+    <div class="topline">
+     <span id="mission">MISSIONE 01</span>
+     <span id="counter">1 / 5</span>
+    </div>
+    <div class="progress"><div class="fill" id="progress"></div></div>
+    <p class="small">AGENTE: <span id="agent"></span></p>
+    <h2 id="title"></h2>
+    <p id="question"></p>
+    <div id="options"></div>
+    <button id="send" onclick="submitAnswer()" disabled>INVIA RISPOSTA</button>
+    <div id="feedback" aria-live="polite"></div>
+    <div id="waiting-box" class="hidden" style="margin-top:15px;text-align:center;color:#26b9a0;font-weight:bold;">
+      ⏳ Risposta registrata! Attendi che il docente sblocchi la prossima missione...
+    </div>
   </section>
 
   <section id="finish" class="card hidden">
-   <h2>🏆 MISSIONE COMPLETATA!</h2>
-   <p>Agente, hai completato tutte le sfide di CYBER MISSION.</p>
-   <h2 id="score"></h2>
-   <p>Ricorda: dietro ogni schermo c'è una persona. Le parole online possono fare male, ma possono anche aiutare.</p>
-   <button onclick="location.reload()">RIGIOCA</button>
+    <h2>🏆 MISSIONE COMPLETATA!</h2>
+    <p>Agente, hai completato tutte le sfide di CYBER MISSION.</p>
+    <p>Hai concluso il percorso guidato dal docente. Ottimo lavoro per aver difeso la comunità digitale!</p>
+    <button onclick="location.reload()">RIGIOCA</button>
   </section>
 </main>
 
@@ -122,7 +123,7 @@ const missions=[
   "Sta facendo pubblicità"
   ],
   correct:2,
-  explanation:"Le immagini personali non devono essere diffuse senza il consenso della persona interessata."
+  explanation:"Le immagini personali non doivent essere diffuse senza il consenso della persona interessata."
 },
 {
   title:"IL TESTIMONE INVISIBILE",
@@ -162,76 +163,138 @@ const missions=[
 }
 ];
 
-let current=0;
-let selected=-1;
-let score=0;
-let nickname="";
+let sessionId = localStorage.getItem("cyber_session_id");
+if (!sessionId) {
+  sessionId = crypto.randomUUID();
+  localStorage.setItem("cyber_session_id", sessionId);
+}
+
+let nickname = "";
+let currentQuestionIndex = 0;
+let selectedOption = -1;
+let answeredCurrent = false;
+let pollTimer = null;
 
 function startGame(){
-  nickname=document.getElementById("nickname").value.trim();
+  nickname = document.getElementById("nickname").value.trim();
   if(!nickname){
-   alert("Inserisci un nickname inventato!");
-   return;
+    alert("Inserisci un nickname inventato!");
+    return;
   }
-  document.getElementById("agent").textContent=nickname;
+  document.getElementById("agent").textContent = nickname;
   document.getElementById("welcome").classList.add("hidden");
   document.getElementById("game").classList.remove("hidden");
-  showQuestion();
+
+  // Inizia il controllo continuo dello stato gestito dal docente
+  startPollingState();
+}
+
+function startPollingState() {
+  if (pollTimer) clearInterval(pollTimer);
+
+  pollTimer = setInterval(async () => {
+    try {
+      const res = await fetch("/api/mission");
+      if (!res.ok) return;
+      const state = await res.json();
+
+      // Se l'evento è terminato o oltre le 5 domande
+      if (state.current_question > 5) {
+        document.getElementById("game").classList.add("hidden");
+        document.getElementById("finish").classList.remove("hidden");
+        clearInterval(pollTimer);
+        return;
+      }
+
+      // Sincronizza l'indice della domanda con quello impostato dal docente (convertito da 1-based a 0-based)
+      const targetIndex = state.current_question - 1;
+      
+      if (targetIndex !== currentQuestionIndex || !answeredCurrent) {
+        // Se il docente è passato a una nuova domanda
+        if (targetIndex !== currentQuestionIndex) {
+          currentQuestionIndex = targetIndex;
+          answeredCurrent = false;
+          showQuestion();
+        }
+      }
+    } catch (err) {
+      console.error("Errore sincronizzazione stato:", err);
+    }
+  }, 2000);
 }
 
 function showQuestion(){
-  const m=missions[current];
-  selected=-1;
-  document.getElementById("mission").textContent="MISSIONE "+String(current+1).padStart(2,"0");
-  document.getElementById("counter").textContent=(current+1)+" / 5";
-  document.getElementById("progress").style.width=(current/5*100)+"%";
-  document.getElementById("title").textContent=m.title;
-  document.getElementById("question").textContent=m.question;
-  document.getElementById("feedback").innerHTML="";
-  document.getElementById("next").classList.add("hidden");
+  if(currentQuestionIndex >= missions.length) return;
+  const m = missions[currentQuestionIndex];
+  selectedOption = -1;
+  
+  document.getElementById("mission").textContent = "MISSIONE " + String(currentQuestionIndex + 1).padStart(2, "0");
+  document.getElementById("counter").textContent = (currentQuestionIndex + 1) + " / 5";
+  document.getElementById("progress").style.width = (currentQuestionIndex / 5 * 100) + "%";
+  document.getElementById("title").textContent = m.title;
+  document.getElementById("question").textContent = m.question;
+  document.getElementById("feedback").innerHTML = "";
+  document.getElementById("waiting-box").classList.add("hidden");
   document.getElementById("send").classList.remove("hidden");
-  document.getElementById("send").disabled=true;
-  const box=document.getElementById("options");
-  box.innerHTML="";
-  m.options.forEach((option,i)=>{
-   const b=document.createElement("button");
-   b.className="option";
-   b.textContent=String.fromCharCode(65+i)+" · "+option;
-   b.onclick=()=>{
-    selected=i;
-    box.querySelectorAll("button").forEach(x=>x.classList.remove("selected"));
-    b.classList.add("selected");
-    document.getElementById("send").disabled=false;
-   };
-   box.appendChild(b);
+  document.getElementById("send").disabled = true;
+
+  const box = document.getElementById("options");
+  box.innerHTML = "";
+  m.options.forEach((option, i) => {
+    const b = document.createElement("button");
+    b.className = "option";
+    b.textContent = String.fromCharCode(65 + i) + " · " + option;
+    b.onclick = () => {
+      if(answeredCurrent) return;
+      selectedOption = i;
+      box.querySelectorAll("button").forEach(x => x.classList.remove("selected"));
+      b.classList.add("selected");
+      document.getElementById("send").disabled = false;
+    };
+    box.appendChild(b);
   });
 }
 
-function submitAnswer(){
-  if(selected<0)return;
-  const m=missions[current];
-  const correct=selected===m.correct;
-  if(correct)score++;
-  document.getElementById("options").querySelectorAll("button").forEach(b=>b.disabled=true);
-  document.getElementById("send").classList.add("hidden");
-  document.getElementById("progress").style.width=((current+1)/5*100)+"%";
-  document.getElementById("feedback").innerHTML=
-   "<strong>"+(correct?"✅ RISPOSTA CORRETTA!":"❌ NON È LA RISPOSTA CORRETTA")+"</strong><br><br>"+
-   m.explanation;
-  document.getElementById("next").classList.remove("hidden");
-  document.getElementById("next").textContent=
-   current===4?"SCOPRI IL RISULTATO 🏆":"PROSSIMA MISSIONE ➜";
-}
+async function submitAnswer(){
+  if(selectedOption < 0 || answeredCurrent) return;
+  answeredCurrent = true;
 
-function nextQuestion(){
-  current++;
-  if(current>=missions.length){
-   document.getElementById("game").classList.add("hidden");
-   document.getElementById("finish").classList.remove("hidden");
-   document.getElementById("score").textContent="Risposte corrette: "+score+" / 5";
-  }else{
-   showQuestion();
+  const questionId = currentQuestionIndex + 1;
+
+  try {
+    const res = await fetch("/api/answer", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        session_id: sessionId,
+        nickname: nickname,
+        question_id: questionId,
+        answer: selectedOption
+      })
+    });
+
+    const data = await res.json();
+    if(!res.ok && res.status !== 409) {
+      console.error("Errore invio:", data.error);
+    }
+  } catch (err) {
+    console.error("Errore di rete:", err);
   }
+
+  // Mostra feedback immediato allo studente sulla risposta data
+  const m = missions[currentQuestionIndex];
+  const correct = selectedOption === m.correct;
+
+  document.getElementById("options").querySelectorAll("button").forEach(b => b.disabled = true);
+  document.getElementById("send").classList.add("hidden");
+  document.getElementById("progress").style.width = ((currentQuestionIndex + 1) / 5 * 100) + "%";
+  
+  document.getElementById("feedback").innerHTML =
+    "<strong>" + (correct ? "✅ RISPOSTA REGISTRATA - CORRETTA!" : "❌ RISPOSTA REGISTRATA") + "</strong><br><br>" +
+    m.explanation;
+
+  // Mostra il messaggio di attesa per la prossima slide del docente
+  document.getElementById("waiting-box").classList.remove("hidden");
 }
 </script>
 </body>
